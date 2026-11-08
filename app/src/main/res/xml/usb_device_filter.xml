@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- FTDI (Digirig Mobile, many Yaesu/Kenwood cables) -->
+    <usb-device vendor-id="1027" />
+    <!-- Silicon Labs CP210x (Digirig, Yaesu FTDX/FT-991/FT-710 built-in USB) -->
+    <usb-device vendor-id="4292" />
+    <!-- WCH CH340/CH343 (uSDX, Xiegu, cheap cables) -->
+    <usb-device vendor-id="6790" />
+    <!-- Prolific PL2303 -->
+    <usb-device vendor-id="1659" />
+    <!-- QRP Labs QMX/QDX (CDC-ACM) -->
+    <usb-device vendor-id="1155" />
+</resources>
