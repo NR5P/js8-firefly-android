@@ -1,6 +1,10 @@
 package com.js8firefly.android.ui
 
 import android.content.Context
+import kotlin.math.sin
+import kotlin.math.acos
+import kotlin.math.asin
+import kotlin.math.atan2
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -279,6 +283,7 @@ fun StationMapView(model: AppModel, modifier: Modifier = Modifier, onSelect: (()
                 if (cam == null || size.width <= 0) return@Canvas
                 drawBaseMap(map, cam)
                 drawGrid(cam, measurer)
+                drawPaths(cam, markers, myGrid, model.selectedCallsign, picked)
                 drawMe(cam, myGrid)
                 drawMarkers(cam, markers, myGrid, model, picked, measurer)
             }
@@ -378,6 +383,68 @@ private fun DrawScope.drawGrid(cam: MapCamera, measurer: TextMeasurer) {
             lat += stepLat
         }
         lon += stepLon
+    }
+}
+
+/**
+ * Great-circle paths from our square to each station (the way the signal goes),
+ * in the station's recency color; the picked or selected one drawn brighter, on top.
+ */
+private fun DrawScope.drawPaths(
+    cam: MapCamera,
+    markers: List<MapMarker>,
+    myGrid: String,
+    selected: String,
+    picked: String?,
+) {
+    val (meLon, meLat) = squareCenter(myGrid) ?: return
+    val now = AppTime.nowMillis()
+    // The copy of our own spot nearest the centre; each path continues from there unwrapped.
+    val startLon = meLon + 360 * Math.round((cam.lon - meLon) / 360).toDouble()
+    val highlighted = ArrayList<Pair<Path, Color>>()
+    for (m in markers) {
+        val pts = greatCircle(meLat, meLon, m.lat, m.lon, steps = 48)
+        val path = Path()
+        var prevLon = startLon
+        for ((k, p) in pts.withIndex()) {
+            var lon = p.second + 360 * Math.round((prevLon - p.second) / 360).toDouble()
+            if (k == 0) lon = startLon
+            prevLon = lon
+            val x = ((lon - cam.lon) * cam.xScale + size.width / 2).toFloat()
+            val y = ((cam.lat - p.first) * cam.scale + size.height / 2).toFloat()
+            if (k == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        val color = ageColor((now - m.latest) / 1000.0)
+        if (m.id == picked || m.calls.any { it.call == selected }) {
+            highlighted.add(path to color)
+        } else {
+            drawPath(path, color.copy(alpha = 0.45f), style = Stroke(1.1f * density))
+        }
+    }
+    for ((path, color) in highlighted) {
+        drawPath(path, color.copy(alpha = 0.9f), style = Stroke(1.8f * density))
+    }
+}
+
+/** The short great-circle path between two places, as (lat, lon) points in degrees. */
+internal fun greatCircle(aLat: Double, aLon: Double, bLat: Double, bLon: Double, steps: Int): List<Pair<Double, Double>> {
+    fun unit(lat: Double, lon: Double): DoubleArray {
+        val p = Math.toRadians(lat)
+        val l = Math.toRadians(lon)
+        return doubleArrayOf(cos(p) * cos(l), cos(p) * sin(l), sin(p))
+    }
+    val u = unit(aLat, aLon)
+    val v = unit(bLat, bLon)
+    val w = acos((u[0] * v[0] + u[1] * v[1] + u[2] * v[2]).coerceIn(-1.0, 1.0))
+    if (w <= 1e-6) return listOf(aLat to aLon, bLat to bLon)
+    return (0..steps).map { k ->
+        val t = k.toDouble() / steps
+        val s1 = sin((1 - t) * w) / sin(w)
+        val s2 = sin(t * w) / sin(w)
+        val x = s1 * u[0] + s2 * v[0]
+        val y = s1 * u[1] + s2 * v[1]
+        val z = s1 * u[2] + s2 * v[2]
+        Math.toDegrees(asin(z.coerceIn(-1.0, 1.0))) to Math.toDegrees(atan2(y, x))
     }
 }
 
