@@ -35,6 +35,22 @@ class FireflyApp : Application() {
         instance = this
         createChannels()
         model = AppModel(this)
+        if (BuildConfig.DEBUG) registerDebugCAT()
+    }
+
+    /**
+     * Debug builds only: send a raw CAT string to the connected radio from a computer, e.g.
+     * `adb shell am broadcast -a com.js8firefly.app.DEBUG_CAT --es cmd "TQ;"`.
+     * Replies show in logcat under the JS8Rig tag.
+     */
+    private fun registerDebugCAT() {
+        val r = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, i: android.content.Intent) {
+                i.getStringExtra("cmd")?.let { model.rig.debugSend(it) }
+            }
+        }
+        androidx.core.content.ContextCompat.registerReceiver(this, r,
+            android.content.IntentFilter("com.js8firefly.app.DEBUG_CAT"), androidx.core.content.ContextCompat.RECEIVER_EXPORTED)
     }
 
     private fun createChannels() {

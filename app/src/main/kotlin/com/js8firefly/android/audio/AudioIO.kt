@@ -466,11 +466,13 @@ class AudioIO(context: Context) {
         val mask = AudioFormat.CHANNEL_OUT_STEREO
         val minBuf = AudioTrack.getMinBufferSize(rate, mask, AudioFormat.ENCODING_PCM_FLOAT)
         val t = try {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            // Keep Samsung/Android spatial audio and other effects off the JS8 tones.
+            if (Build.VERSION.SDK_INT >= 32) attrs.setSpatializationBehavior(AudioAttributes.SPATIALIZATION_BEHAVIOR_NEVER)
             val b = AudioTrack.Builder()
-                .setAudioAttributes(AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build())
+                .setAudioAttributes(attrs.build())
                 .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setChannelMask(mask)
                     .setEncoding(AudioFormat.ENCODING_PCM_FLOAT).build())
                 .setTransferMode(AudioTrack.MODE_STREAM)

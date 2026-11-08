@@ -1,5 +1,7 @@
 package com.js8firefly.android.radio
 
+import com.js8firefly.android.BuildConfig
+import android.util.Log
 import android.content.Context
 import android.hardware.usb.UsbDevice
 import androidx.compose.runtime.getValue
@@ -235,6 +237,7 @@ class RigController(context: Context) {
     }
 
     fun connect() {
+        kenwoodVFO = 'A'
         rxBuffer.reset()
         pendingRigctldReplies.clear()
         icomDataModePending = false
@@ -252,6 +255,7 @@ class RigController(context: Context) {
                     status = Status.error(if (serialPorts.isEmpty()) "No USB serial adapter found" else "Choose a serial port")
                     return
                 }
+                connectedPortName = serialPorts.firstOrNull { it.id == key }?.name ?: ""
                 t = SerialTransport(context, key, settings.baud, settings.stopBits)
             }
             RigConnection.bluetooth -> t = BLESerialTransport(context, settings.bluetoothID.ifEmpty { null })
@@ -359,13 +363,25 @@ class RigController(context: Context) {
             RigConnection.flrig -> flrigCall("rig.set_vfo", listOf("<double>$hz</double>")) {}
             else -> when (settings.catProtocol) {
                 CATProtocol.yaesu -> send(String.format(Locale.US, "FA%0${settings.yaesuDigits}d;", hz))
-                CATProtocol.kenwood -> send(String.format(Locale.US, "FA%011d;", hz))
+                CATProtocol.kenwood -> send(String.format(Locale.US, "F%c%011d;", kenwoodVFO, hz))
                 CATProtocol.icom -> sendCIV(byteArrayOf(0x05) + bcd(hz, 5))
             }
         }
     }
 
+    /** A QRP Labs QMX/QDX: by preset, or by the USB serial device's name with a Custom preset. */
+    private val isQRPLabs: Boolean
+        get() = settings.preset == RigPreset.qmx || settings.preset == RigPreset.qdx ||
+            (settings.connection == RigConnection.serial && connectedPortName.uppercase().let { "QMX" in it || "QDX" in it })
+
+    /** Kenwood-protocol VFO the rig receives on ('A' or 'B'), from its FR reply. */
+    private var kenwoodVFO = 'A'
+
+    /** Name of the USB serial port in use, e.g. "QRP Labs QMX Transceiver". */
+    private var connectedPortName = ""
+
     fun setPTT(on: Boolean) {
+        Log.i(TAG, "PTT ${if (on) "on" else "off"} (status ${status.label}, ${settings.connection.rawValue}/${settings.catProtocol.rawValue})")
         pttActive = on
         if (status != Status.connected) return
         when (settings.connection) {
@@ -390,8 +406,9 @@ class RigController(context: Context) {
             RigConnection.flrig -> {}
             else -> when (settings.catProtocol) {
                 CATProtocol.yaesu -> send("MD0C;")
-                // USB; QMX/QDX/Elecraft treat USB with audio as digital.
-                CATProtocol.kenwood -> send("MD2;")
+                // QMX/QDX: Digi (MD6). Their newer firmware has SSB, where MD2 is
+                // voice USB and the radio then ignores CAT TX. Others: USB.
+                CATProtocol.kenwood -> send(if (isQRPLabs) "MD6;" else "MD2;")
                 CATProtocol.icom -> {
                     // Both mode commands carry a filter byte; read the current one first.
                     icomDataModePending = true
@@ -414,7 +431,9 @@ class RigController(context: Context) {
                 }
             }
             else -> when (settings.catProtocol) {
-                CATProtocol.yaesu, CATProtocol.kenwood -> send("FA;")
+                CATProtocol.yaesu -> send("FA;")
+                // Kenwood-style rigs (QMX, TS-480…) may be on VFO B: ask which, then read it.
+                CATProtocol.kenwood -> send("FR;F$kenwoodVFO;")
                 CATProtocol.icom -> sendCIV(byteArrayOf(0x03))
             }
         }
@@ -432,7 +451,13 @@ class RigController(context: Context) {
 
     // MARK: Transport I/O
 
-    private fun send(s: String) { transport?.write(s.toByteArray(Charsets.UTF_8)) }
+    /** Debug builds: raw CAT from adb (see FireflyApp.registerDebugCAT). */
+    fun debugSend(s: String) { if (BuildConfig.DEBUG) send(s) }
+
+    private fun send(s: String) {
+        if (BuildConfig.DEBUG) Log.d(TAG, "CAT > $s")
+        transport?.write(s.toByteArray(Charsets.UTF_8))
+    }
 
     private fun sendCIV(body: ByteArray) {
         val frame = byteArrayOf(0xFE.toByte(), 0xFE.toByte(), settings.icomAddress.toByte(), 0xE0.toByte()) +
@@ -441,6 +466,8 @@ class RigController(context: Context) {
     }
 
     companion object {
+        private const val TAG = "JS8Rig"
+
         fun bcd(hz: Long, bytes: Int): ByteArray {
             var v = hz
             val out = ByteArray(bytes)
@@ -460,6 +487,7 @@ class RigController(context: Context) {
     }
 
     private fun received(d: ByteArray) {
+        if (BuildConfig.DEBUG) Log.d(TAG, "CAT < ${String(d, Charsets.ISO_8859_1).replace("\r", "\\r")}")
         rxBuffer.write(d)
         var buf = rxBuffer.toByteArray()
         fun consume(through: Int) {
@@ -482,7 +510,15 @@ class RigController(context: Context) {
                         if (semi < 0) break
                         val reply = String(buf, 0, semi, Charsets.UTF_8)
                         consume(semi)
-                        if (reply.startsWith("FA")) reply.substring(2).toLongOrNull()?.let { gotFrequency(it) }
+                        if (settings.catProtocol == CATProtocol.kenwood) {
+                            when {
+                                reply == "FR0" -> kenwoodVFO = 'A'
+                                reply == "FR1" -> kenwoodVFO = 'B'
+                                reply.startsWith("F$kenwoodVFO") -> reply.substring(2).toLongOrNull()?.let { gotFrequency(it) }
+                            }
+                        } else if (reply.startsWith("FA")) {
+                            reply.substring(2).toLongOrNull()?.let { gotFrequency(it) }
+                        }
                     }
                 }
                 CATProtocol.icom -> {
