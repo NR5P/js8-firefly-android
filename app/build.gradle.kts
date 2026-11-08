@@ -77,6 +77,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // play-services-location brings an old Fragment; ActivityResult permission prompts need 1.3+.
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     // USB serial CAT and RTS/DTR PTT (FTDI, CP210x, CH34x, CDC-ACM: Digirig, QMX, Yaesu).
     implementation("com.github.mik3y:usb-serial-for-android:3.8.1")
     implementation("com.google.android.gms:play-services-location:21.3.0")
