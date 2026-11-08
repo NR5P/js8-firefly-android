@@ -313,6 +313,25 @@ class AppModel(context: Context) {
 
     /** QMX/QDX carry TX audio over their own USB sound card and key on that audio
      *  (their Digi VOX setting), so the Digirig keying tone would only corrupt the signal. */
+    /** When the QMX/QDX level warning was last shown, so it doesn't repeat every period. */
+    private var lastLevelWarning = 0L
+
+    /**
+     * QMX/QDX only key down (make RF) when the USB audio sine reaches their Rise
+     * threshold, 80% of full scale by default; below it they sit in transmit with no
+     * output. Warn when the TX level or the phone's media volume would keep it there.
+     */
+    private fun checkQRPLabsLevel() {
+        val name = audio.usbInterfaceName?.uppercase() ?: return
+        if (!(name.contains("QMX") || name.contains("QDX"))) return
+        if (settings.tx.outputLevel >= 0.99f && audio.mediaVolumeFraction >= 0.99f) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastLevelWarning < 10 * 60_000L && lastLevelWarning != 0L) return
+        lastLevelWarning = now
+        banner = "QMX/QDX transmit only at full audio: set TX level to 100% (Levels) and the phone's media volume to max. " +
+            "Samsung: turn off Media volume limit."
+    }
+
     private fun adaptPTTToInterface() {
         val name = audio.usbInterfaceName?.uppercase() ?: return
         if (!(name.contains("QMX") || name.contains("QDX")) || settings.tx.pttMethod != PTTMethod.digirigTone) return
@@ -449,6 +468,7 @@ class AppModel(context: Context) {
 
     fun startTune() {
         if (!settings.txEnabled) return
+        checkQRPLabsLevel()
         isTuning = true
         audio.tune(settings.offset.toDouble(), settings.tx)
         keyPTT(true)
@@ -495,6 +515,7 @@ class AppModel(context: Context) {
         val now = AppClock.now()
         if (!isTuning) {
             station.pollTransmit(now)?.let { req ->
+                checkQRPLabsLevel()
                 if (!isDemo) audio.transmit(req, settings.tx)
                 txText = req.displayText
                 refresh(force = true)

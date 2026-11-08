@@ -283,6 +283,8 @@ class RigController(context: Context) {
     }
 
     fun disconnect() {
+        reconnectJob?.cancel()
+        reconnectJob = null
         pollJob?.cancel()
         pollJob = null
         if (pttActive) setPTT(false)
@@ -334,8 +336,29 @@ class RigController(context: Context) {
             is TransportState.failed -> {
                 pollJob?.cancel()
                 status = Status.error(st.message)
+                scheduleReconnect()
             }
             TransportState.idle -> {}
+        }
+    }
+
+    private var reconnectJob: Job? = null
+
+    /**
+     * USB serial drops when the radio is unplugged or power-cycled; keep trying
+     * every few seconds so CAT comes back on its own (a fresh plug-in also
+     * reconnects at once through usbDeviceAttached).
+     */
+    private fun scheduleReconnect() {
+        if (settings.connection != RigConnection.serial || reconnectJob?.isActive == true) return
+        reconnectJob = scope.launch {
+            while (settings.connection == RigConnection.serial && status != Status.connected) {
+                delay(3000)
+                if (status == Status.connecting || status == Status.connected) continue
+                transport?.close()
+                transport = null
+                connect()
+            }
         }
     }
 

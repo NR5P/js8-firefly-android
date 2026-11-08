@@ -1,5 +1,6 @@
 package com.js8firefly.android.audio
 
+import com.js8firefly.android.BuildConfig
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -105,6 +106,13 @@ class TxPlayback(
 class AudioIO(context: Context) {
     private val context = context.applicationContext
     private val audioManager = this.context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    /** The phone's media volume for the current output, 0…1 (USB audio is scaled by it). */
+    val mediaVolumeFraction: Float
+        get() {
+            val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            return if (max <= 0) 1f else audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
+        }
     private val main = Handler(Looper.getMainLooper())
 
     val ring = RxRingBuffer()
@@ -510,8 +518,17 @@ class AudioIO(context: Context) {
         val buf = FloatArray(frames * 2)
         var written = 0L
         val ts = AudioTimestamp()
+        var peakLog = 0f
+        var blocks = 0
         while (running) {
             render(t, buf, frames, written, ts)
+            if (BuildConfig.DEBUG && txRef.get() != null) {
+                for (v in buf) if (abs(v) > peakLog) peakLog = abs(v)
+                if (++blocks % 100 == 0) {
+                    Log.d(TAG, "TX out peak %.3f (level %.2f, routed %s)".format(peakLog, outputLevel, t.routedDevice?.productName))
+                    peakLog = 0f
+                }
+            }
             var off = 0
             while (off < buf.size && running) {
                 val n = t.write(buf, off, buf.size - off, AudioTrack.WRITE_BLOCKING)
