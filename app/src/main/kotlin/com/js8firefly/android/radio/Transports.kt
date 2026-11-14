@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
@@ -279,7 +280,7 @@ class BLESerialTransport(context: Context, private val targetID: String?) : Byte
     @Suppress("DEPRECATION")
     private fun writeCharacteristic(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray, type: Int): Boolean =
         if (Build.VERSION.SDK_INT >= 33) {
-            g.writeCharacteristic(c, value, type) == BluetoothGatt.GATT_SUCCESS
+            g.writeCharacteristic(c, value, type) == BluetoothStatusCodes.SUCCESS
         } else {
             c.writeType = type
             c.value = value
@@ -289,7 +290,7 @@ class BLESerialTransport(context: Context, private val targetID: String?) : Byte
     @Suppress("DEPRECATION")
     private fun writeDescriptor(g: BluetoothGatt, d: BluetoothGattDescriptor, value: ByteArray): Boolean =
         if (Build.VERSION.SDK_INT >= 33) {
-            g.writeDescriptor(d, value) == BluetoothGatt.GATT_SUCCESS
+            g.writeDescriptor(d, value) == BluetoothStatusCodes.SUCCESS
         } else {
             d.value = value
             g.writeDescriptor(d)

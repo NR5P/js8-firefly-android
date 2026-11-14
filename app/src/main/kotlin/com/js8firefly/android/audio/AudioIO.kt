@@ -308,7 +308,7 @@ class AudioIO(context: Context) {
     }
 
     private fun currentSignature(): String =
-        audioManager.getDevices(AudioManager.GET_DEVICES_ALL).map { "${it.id}:${it.type}:${it.isSource}" }.sorted().joinToString(",")
+        audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS or AudioManager.GET_DEVICES_OUTPUTS).map { "${it.id}:${it.type}:${it.isSource}" }.sorted().joinToString(",")
 
     private fun devicesChanged() {
         // Registration replays the current devices; only act on real changes.
@@ -371,6 +371,9 @@ class AudioIO(context: Context) {
     private class RecordConfig(val source: Int, val channels: Int, val encoding: Int)
 
     private fun buildRecord(): Pair<AudioRecord, RecordConfig>? {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            return null
+        }
         val unprocessed = Build.VERSION.SDK_INT >= 24 &&
             audioManager.getProperty(AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
         val sources = buildList {
