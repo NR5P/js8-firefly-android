@@ -3,6 +3,7 @@ package com.js8firefly.core
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -258,5 +259,238 @@ class StationTests {
             run(listOf(a, b), periods = 4, submode = mode)
             assertTrue("$mode: " + conversationText(a), conversationText(a).contains("J1Y: KN4CRD SNR"))
         }
+    }
+
+    // MARK: Store Message
+    // Messages stored locally with "Store Message" (no transmission), then
+    // picked up over the air by the recipient.
+
+    private fun bandText(s: JS8Station): String = s.bandConversation.joinToString("\n") { it.text }
+    private fun heard(s: JS8Station): String = conversationText(s) + "\n--band--\n" + bandText(s)
+
+    @Test
+    fun testStoreMessageSavesWithoutTransmitting() {
+        val b = makeStation("J1Y", "PM95")
+        b.dialFrequency = 7_078_000
+        b.offset = 1234
+        val id = b.storeMessage(to = "w1aw", text = "  meet on 40m\nat 2000z  ")
+        assertEquals(1, id)
+        val m = b.inbox.messages.first()
+        assertEquals("STORE", m.type)
+        assertEquals("J1Y", m.from)
+        assertEquals("W1AW", m.to)
+        assertEquals("J1Y", m.path)
+        assertEquals(" MSG ", m.cmd)
+        assertEquals("MEET ON 40M AT 2000Z", m.text)
+        assertEquals(7_078_000L, m.dial)
+        assertEquals(1234, m.offset)
+        assertEquals(clock.now, m.utc)
+        // Nothing queued for the air.
+        assertNull(b.pollTransmit(now = clock.now))
+        b.tick()
+        assertNull(b.pollTransmit(now = clock.now))
+        assertEquals("a held message must not count as unread for me", 0, b.inbox.unreadCount)
+    }
+
+    @Test
+    fun testStoreMessageUsesBaseCallsign() {
+        val b = makeStation("J1Y", "PM95")
+        b.storeMessage(to = "W1AW/P", text = "ONE")
+        b.storeMessage(to = "VE3/W1AW", text = "TWO")
+        assertEquals(listOf("W1AW", "W1AW"), b.inbox.messages.map { it.to })
+        b.storeMessage(to = "@ragchew", text = "THREE")
+        assertEquals("@RAGCHEW", b.inbox.messages.last().to)
+    }
+
+    @Test
+    fun testStoreMessageRejectsBadInput() {
+        val b = makeStation("J1Y", "PM95")
+        assertNull(b.storeMessage(to = "", text = "HI"))
+        assertNull(b.storeMessage(to = "W1AW", text = "   \n "))
+        assertNull(b.storeMessage(to = "HELLO", text = "HI"))
+        assertNull("storing for yourself", b.storeMessage(to = "J1Y", text = "HI"))
+        assertNull("storing for your own portable call", b.storeMessage(to = "J1Y/P", text = "HI"))
+        assertNull(b.storeMessage(to = "@ALLCALL", text = "HI"))
+        assertNull(b.storeMessage(to = "@HB", text = "HI"))
+        assertNull(b.storeMessage(to = "@APRSIS", text = "HI"))
+        assertNull(b.storeMessage(to = "@", text = "HI"))
+        assertTrue(b.inbox.messages.isEmpty())
+
+        val noCall = makeStation("", "PM95")
+        assertNull("no callsign set", noCall.storeMessage(to = "W1AW", text = "HI"))
+    }
+
+    @Test
+    fun testStoreRecipientProblemMessages() {
+        assertNull(JS8Station.storeRecipientProblem("W1AW"))
+        assertNull(JS8Station.storeRecipientProblem(" w1aw "))
+        assertNull(JS8Station.storeRecipientProblem("VE3/KN4CRD"))
+        assertNull(JS8Station.storeRecipientProblem("@GROUP"))
+        assertNotNull(JS8Station.storeRecipientProblem(""))
+        assertNotNull(JS8Station.storeRecipientProblem("Q"))
+        assertNotNull(JS8Station.storeRecipientProblem("W1AW W2XYZ"))
+        assertEquals("N0CALL1234 isn't a valid callsign.", JS8Station.storeRecipientProblem("N0CALL1234"))
+        assertEquals("That's your own callsign.", JS8Station.storeRecipientProblem("NR5P", mycall = "nr5p"))
+        assertNull(JS8Station.storeRecipientProblem("W1AW", mycall = "NR5P"))
+    }
+
+    @Test
+    fun testStoredMessageSurvivesRelaunch() {
+        val file = java.io.File.createTempFile("store-", ".json")
+        file.delete()
+        try {
+            val cfg = StationConfig()
+            cfg.callsign = "J1Y"
+            val b = JS8Station(config = cfg, inbox = Inbox(url = file), clock = { clock.now })
+            b.storeMessage(to = "W1AW", text = "STILL HERE")
+            val reopened = Inbox(url = file)
+            assertEquals(1, reopened.messages.size)
+            assertEquals("STORE", reopened.messages.first().type)
+            assertEquals("STILL HERE", reopened.messages.first().text)
+            assertEquals(1, reopened.nextMessageId(`for` = "W1AW"))
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun testStoredMessageFetchedWithQueryMsgs() {
+        val b = makeStation("J1Y", "PM95")
+        val c = makeStation("W1AW", "FN31")
+        assertEquals(1, b.storeMessage(to = "W1AW", text = "NET MOVED TO 7110 SUNDAY 2000Z"))
+
+        c.selectedCallsign = "J1Y"
+        c.send("QUERY MSGS")
+        run(listOf(b, c), periods = 6)
+        assertTrue(heard(c), conversationText(c).contains("J1Y: W1AW YES MSG ID 1"))
+
+        c.send("QUERY MSG 1")
+        run(listOf(b, c), periods = 10)
+        assertTrue(heard(c), conversationText(c).contains("NET MOVED TO 7110 SUNDAY 2000Z FROM J1Y"))
+        assertEquals("DELIVERED", b.inbox.messages.first().type)
+
+        // Nothing left once it's delivered.
+        c.send("QUERY MSGS")
+        run(listOf(b, c), periods = 6)
+        assertTrue(heard(c), conversationText(c).contains("J1Y: W1AW NO"))
+    }
+
+    @Test
+    fun testHeartbeatAckAnnouncesStoredMessage() {
+        val b = makeStation("J1Y", "PM95")
+        val c = makeStation("W1AW", "FN31")
+        b.storeMessage(to = "W1AW", text = "CALL ME")
+        c.sendHeartbeat()
+        run(listOf(b, c), periods = 4)
+        assertTrue(heard(c), heard(c).contains("MSG ID 1"))
+        assertEquals("announcing must not mark it delivered", "STORE", b.inbox.messages.first().type)
+    }
+
+    @Test
+    fun testOnlyRecipientCanFetchStoredMessage() {
+        val b = makeStation("J1Y", "PM95")
+        val d = makeStation("KN4CRD", "EM73")
+        b.storeMessage(to = "W1AW", text = "PRIVATE FOR W1AW")
+        d.selectedCallsign = "J1Y"
+        d.send("QUERY MSGS")
+        run(listOf(b, d), periods = 6)
+        assertTrue(heard(d), conversationText(d).contains("J1Y: KN4CRD NO"))
+        d.send("QUERY MSG 1")
+        run(listOf(b, d), periods = 8)
+        assertFalse(heard(d), heard(d).contains("PRIVATE FOR W1AW"))
+        assertEquals("STORE", b.inbox.messages.first().type)
+    }
+
+    @Test
+    fun testPortableRecipientFetchesMessageStoredForBaseCall() {
+        val b = makeStation("J1Y", "PM95")
+        val c = makeStation("W1AW/P", "FN31")
+        b.storeMessage(to = "W1AW", text = "WORKS PORTABLE TOO")
+        c.selectedCallsign = "J1Y"
+        c.send("QUERY MSGS")
+        run(listOf(b, c), periods = 6)
+        assertTrue(heard(c), heard(c).contains("YES MSG ID 1"))
+        c.send("QUERY MSG 1")
+        run(listOf(b, c), periods = 10)
+        assertTrue(heard(c), heard(c).contains("WORKS PORTABLE TOO FROM J1Y"))
+        assertEquals("DELIVERED", b.inbox.messages.first().type)
+    }
+
+    @Test
+    fun testBaseCallFetchesMessageStoredForPortableCall() {
+        val b = makeStation("J1Y", "PM95")
+        val c = makeStation("W1AW", "FN31")
+        b.storeMessage(to = "W1AW/P", text = "TYPED THE PORTABLE CALL")
+        c.selectedCallsign = "J1Y"
+        c.send("QUERY MSG 1")
+        run(listOf(b, c), periods = 10)
+        assertTrue(heard(c), heard(c).contains("TYPED THE PORTABLE CALL FROM J1Y"))
+        assertEquals("DELIVERED", b.inbox.messages.first().type)
+    }
+
+    @Test
+    fun testSeveralStoredMessagesChainWithNextId() {
+        val b = makeStation("J1Y", "PM95")
+        val c = makeStation("W1AW", "FN31")
+        b.storeMessage(to = "W1AW", text = "FIRST ONE")
+        b.storeMessage(to = "W1AW", text = "SECOND ONE")
+        c.selectedCallsign = "J1Y"
+        c.send("QUERY MSGS")
+        run(listOf(b, c), periods = 6)
+        assertTrue(heard(c), conversationText(c).contains("YES MSG ID 1 +1"))
+        c.send("QUERY MSG 1")
+        run(listOf(b, c), periods = 10)
+        assertTrue(heard(c), conversationText(c).contains("FIRST ONE FROM J1Y NEXT MSG ID 2"))
+        c.send("QUERY MSG 2")
+        run(listOf(b, c), periods = 10)
+        assertTrue(heard(c), conversationText(c).contains("SECOND ONE FROM J1Y"))
+        assertEquals(listOf("DELIVERED", "DELIVERED"), b.inbox.messages.map { it.type })
+    }
+
+    @Test
+    fun testStoredAndRelayedMessagesShareTheQueue() {
+        val a = makeStation("KN4CRD", "EM73")
+        val b = makeStation("J1Y", "PM95")
+        val c = makeStation("W1AW", "FN31")
+        b.storeMessage(to = "W1AW", text = "FROM THE HOLDER")
+        a.selectedCallsign = "J1Y"
+        a.send("MSG TO:W1AW FROM THE RELAYER")
+        run(listOf(a, b, c), periods = 8)
+        assertEquals(b.inbox.messages.map { it.text }.toString(), listOf("STORE", "STORE"), b.inbox.messages.map { it.type })
+        c.selectedCallsign = "J1Y"
+        c.send("QUERY MSGS")
+        run(listOf(a, b, c), periods = 6)
+        assertTrue(heard(c), conversationText(c).contains("YES MSG ID 1 +1"))
+    }
+
+    @Test
+    fun testGroupStoredMessage() {
+        val b = makeStation("J1Y", "PM95")
+        val c = makeStation("W1AW", "FN31")
+        b.config.groups = listOf("@RAGCHEW")
+        c.config.groups = listOf("@RAGCHEW")
+        b.storeMessage(to = "@RAGCHEW", text = "GROUP NOTICE")
+        c.selectedCallsign = "@RAGCHEW"
+        c.send("QUERY MSGS")
+        run(listOf(b, c), periods = 6)
+        assertTrue(heard(c), heard(c).contains("YES MSG ID 1"))
+        c.selectedCallsign = "J1Y"
+        c.send("QUERY MSG 1")
+        run(listOf(b, c), periods = 10)
+        assertTrue(heard(c), heard(c).contains("GROUP NOTICE FROM J1Y"))
+        assertEquals(listOf("W1AW"), b.inbox.messages.first().groupDelivered)
+        assertEquals("group messages stay for other members", "STORE", b.inbox.messages.first().type)
+    }
+
+    @Test
+    fun testStoredMessageWithPunctuationArrivesIntact() {
+        val b = makeStation("J1Y", "PM95")
+        val c = makeStation("W1AW", "FN31")
+        val text = "QTH CHANGED, NEW GRID FN42? CALL 555-1212. 73!"
+        b.storeMessage(to = "W1AW", text = text)
+        c.selectedCallsign = "J1Y"
+        c.send("QUERY MSG 1")
+        run(listOf(b, c), periods = 14)
+        assertTrue(heard(c), conversationText(c).contains("$text FROM J1Y"))
     }
 }

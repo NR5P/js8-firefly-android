@@ -348,7 +348,12 @@ fun FormButton(title: String, color: Color = Theme.accent, enabled: Boolean = tr
 /** A bottom sheet with an inline title bar and a Done button, like a NavigationStack sheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FireflySheet(title: String, onDismiss: () -> Unit, fullHeight: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+fun FireflySheet(
+    title: String,
+    onDismiss: () -> Unit,
+    fullHeight: Boolean = false,
+    dismissLabel: String = "Done",
+    content: @Composable ColumnScope.() -> Unit) {
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = fullHeight)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -363,7 +368,7 @@ fun FireflySheet(title: String, onDismiss: () -> Unit, fullHeight: Boolean = fal
         Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
             Text(title, style = Theme.rounded(17, SemiBold), color = Theme.text, modifier = Modifier.align(Alignment.Center))
             TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Text("Done", style = Theme.rounded(17, SemiBold), color = Theme.accent)
+                Text(dismissLabel, style = Theme.rounded(17, SemiBold), color = Theme.accent)
             }
         }
         Column(Modifier.fillMaxWidth(), content = content)

@@ -51,6 +51,13 @@ import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -613,12 +620,27 @@ fun ControlButton(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun InboxView(model: AppModel, modifier: Modifier = Modifier, showHeader: Boolean = true) {
+    // Non-null while the Store Message sheet is open; holds the pre-filled callsign.
+    var storeFor by remember { mutableStateOf<String?>(null) }
+    val openStore = {
+        val sel = model.selectedCallsign
+        storeFor = if (model.storeRecipientProblem(sel) == null) sel else ""
+    }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (showHeader) SectionHeader("Inbox", Icons.Outlined.Inbox)
+        if (showHeader) {
+            SectionHeader("Inbox", Icons.Outlined.Inbox) {
+                HeaderLink("Store Message", Icons.Outlined.EditNote, Theme.accent, openStore)
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                HeaderLink("Store Message", Icons.Outlined.EditNote, Theme.accent, openStore)
+            }
+        }
         if (model.inbox.isEmpty()) {
             EmptyStateView(
                 Icons.Outlined.Inbox, "No messages",
-                "Messages sent to you with MSG, and messages you hold for others (MSG TO:), appear here.",
+                "Messages sent to you with MSG, and messages you hold for others, appear here. " +
+                    "Tap Store Message to leave one at your station for someone to pick up.",
             )
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -627,10 +649,14 @@ fun InboxView(model: AppModel, modifier: Modifier = Modifier, showHeader: Boolea
                     Box {
                         InboxRow(m, Modifier.combinedClickable(onClick = { model.markRead(m) }, onLongClick = { menu = true }))
                         FireflyMenu(menu, { menu = false }) {
-                            MenuItem("Reply to ${m.from}") {
+                            val other = inboxCounterpart(m, model.settings.station.callsign)
+                            MenuItem("Reply to $other") {
                                 menu = false
-                                model.selectedCallsign = m.from
+                                model.selectedCallsign = other
                                 model.draft = "MSG "
+                            }
+                            if (model.storeRecipientProblem(other) == null) {
+                                MenuItem("Store Message for $other…") { menu = false; storeFor = other }
                             }
                             MenuItem("Delete", color = Theme.tx) { menu = false; model.deleteMessage(m) }
                         }
@@ -638,6 +664,79 @@ fun InboxView(model: AppModel, modifier: Modifier = Modifier, showHeader: Boolea
                 }
                 item { Spacer(Modifier.height(8.dp)) }
             }
+        }
+    }
+    storeFor?.let { to -> StoreMessageSheet(model, to) { storeFor = null } }
+}
+
+/** The other station on a message: the sender, or the recipient when it's one
+ *  we stored ourselves. */
+internal fun inboxCounterpart(m: InboxMessage, mycall: String): String {
+    val me = mycall.trim().uppercase()
+    return if (Varicode.baseCallsign(m.from) == Varicode.baseCallsign(me) && m.to.isNotEmpty()) m.to else m.from
+}
+
+/**
+ * JS8Call's "Store Message" dialog: write a message that waits at this station,
+ * nothing is transmitted now. The recipient is told it's waiting when they
+ * heartbeat or send QUERY MSGS, and fetches it with QUERY MSG <id>.
+ */
+@Composable
+fun StoreMessageSheet(model: AppModel, initialTo: String, onDismiss: () -> Unit) {
+    var to by remember { mutableStateOf(initialTo.uppercase()) }
+    var text by remember { mutableStateOf("") }
+    var toFocused by remember { mutableStateOf(false) }
+    val toFocus = remember { FocusRequester() }
+    val textFocus = remember { FocusRequester() }
+
+    val cleanTo = to.trim().uppercase()
+    val recipientProblem = model.storeRecipientProblem(cleanTo)
+    // Shown once they leave the To field, not while they're mid-callsign.
+    val problem = if (cleanTo.isEmpty() || toFocused) null else recipientProblem
+    val canSave = recipientProblem == null && text.isNotBlank()
+    val who = if (recipientProblem == null) cleanTo else "that station"
+    val me = model.settings.station.callsign.ifEmpty { "you" }
+
+    LaunchedEffect(Unit) {
+        runCatching { (if (cleanTo.isEmpty()) toFocus else textFocus).requestFocus() }
+    }
+
+    FireflySheet("Store Message", onDismiss, fullHeight = true, dismissLabel = "Cancel") {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding()) {
+            FormSection("To") {
+                FormRow(divider = problem != null) {
+                    PlainField(
+                        to, { to = it }, "Callsign or @GROUP",
+                        Modifier.weight(1f).focusRequester(toFocus).onFocusChanged { toFocused = it.isFocused },
+                        style = Theme.mono(15, Bold), uppercase = true,
+                        onSubmit = { runCatching { textFocus.requestFocus() } },
+                    )
+                }
+                if (problem != null) {
+                    FormRow(divider = false) { Text(problem, style = Theme.rounded(13), color = Theme.tx) }
+                }
+            }
+            FormSection(
+                "Message",
+                footer = "Nothing is sent now. The message waits in your Inbox as HOLDING. When $who sends a " +
+                    "heartbeat or QUERY MSGS to $me, Firefly replies that a message is waiting, and they pick it " +
+                    "up with QUERY MSG. Keep Firefly running with auto-reply on so your station can answer.",
+            ) {
+                FormRow(divider = false) {
+                    PlainField(
+                        text, { text = it }, "Message",
+                        Modifier.weight(1f).heightIn(min = 72.dp).focusRequester(textFocus),
+                        style = Theme.mono(15), uppercase = true, singleLine = false,
+                    )
+                }
+            }
+            FormSection {
+                FormButton("Store", enabled = canSave, icon = Icons.Outlined.Inbox) {
+                    model.storeMessage(cleanTo, text)
+                    onDismiss()
+                }
+            }
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

@@ -499,6 +499,13 @@ class AppModel(context: Context) {
         station.inbox.delete(m.id)
     }
 
+    /** Why `to` can't hold a message stored here, or null when it can. */
+    fun storeRecipientProblem(to: String): String? =
+        JS8Station.storeRecipientProblem(to, mycall = settings.station.callsign)
+
+    /** JS8Call's "Store Message…": hold a message here for `to`; nothing is sent. */
+    fun storeMessage(to: String, text: String): Int? = station.storeMessage(to = to, text = text)
+
     fun preview(text: String): List<DecodedText> = station.preview(text.uppercase())
 
     private fun keyPTT(on: Boolean) {

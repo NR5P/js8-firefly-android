@@ -183,7 +183,7 @@ fun StationsView(model: AppModel, modifier: Modifier = Modifier, onSelect: (() -
 }
 
 @Composable
-private fun HeaderLink(title: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
+internal fun HeaderLink(title: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
     Row(
         Modifier.clip(RoundedCornerShape(6.dp)).clickable(onClick = onClick).padding(2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -199,6 +199,7 @@ private fun HeaderLink(title: String, icon: ImageVector, color: Color, onClick: 
 @Composable
 fun StationListRow(model: AppModel, cd: CallDetail, nowMillis: Long, onSelect: (() -> Unit)?) {
     var menu by remember { mutableStateOf(false) }
+    var storing by remember { mutableStateOf(false) }
     Box {
         StationRow(
             cd, model.settings.station.grid,
@@ -218,8 +219,10 @@ fun StationListRow(model: AppModel, cd: CallDetail, nowMillis: Long, onSelect: (
             MenuItem("Move to ${cd.offset} Hz") { menu = false; model.setOffset(cd.offset) }
             MenuItem("Ask SNR?") { menu = false; model.selectedCallsign = cd.call; model.send("SNR?") }
             MenuItem("Ask GRID?") { menu = false; model.selectedCallsign = cd.call; model.send("GRID?") }
+            MenuItem("Store Message for ${cd.call}…") { menu = false; storing = true }
         }
     }
+    if (storing) StoreMessageSheet(model, cd.call) { storing = false }
 }
 
 @Composable

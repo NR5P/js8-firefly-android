@@ -173,6 +173,22 @@ class JS8Station(
         private const val FIRST = 1 // Varicode.TransmissionType.first
         private const val LAST = 2  // Varicode.TransmissionType.last
 
+        /** Why `to` can't hold a message stored at this station, or null when
+         *  it can. Takes a callsign (base or compound) or an @GROUP. */
+        fun storeRecipientProblem(to: String, mycall: String = ""): String? {
+            val t = to.qTrimmed().uppercase()
+            if (t.isEmpty()) return "Enter a callsign or @GROUP."
+            if (t.startsWith("@")) {
+                if (t.length < 2) return "Enter a group name after @."
+                if (t == "@ALLCALL" || t == "@HB" || !Varicode.isGroupAllowed(t)) return "$t can't hold messages."
+                return if (t.contains(" ")) "$t isn't a valid group." else null
+            }
+            if (!Varicode.isValidCallsign(t).valid) return "$t isn't a valid callsign."
+            val me = mycall.qTrimmed().uppercase()
+            if (me.isNotEmpty() && Varicode.baseCallsign(t) == Varicode.baseCallsign(me)) return "That's your own callsign."
+            return null
+        }
+
         fun since(date: Instant, now: Instant): String {
             val delta = now.timeIntervalSince(date).toInt()
             if (delta >= 86400) return "${delta / 86400}d"
@@ -1162,6 +1178,30 @@ class JS8Station(
             draftText = message.message
         }
         message.onSent?.invoke()
+    }
+
+    /**
+     * JS8Call's "Store Message…": keep a message at this station for `to`
+     * without transmitting. It is held as STORE under the base callsign, the
+     * same as a message relayed here with MSG TO:, so `to` hears it's waiting
+     * in our HB ACK / QUERY MSGS replies and fetches it with QUERY MSG <id>.
+     * Returns the inbox id, or null when nothing was stored.
+     */
+    fun storeMessage(to: String, text: String): Int? {
+        val t = to.qTrimmed().uppercase()
+        val body = text.split('\n', '\r').joinToString(" ").qTrimmed().uppercase()
+        if (storeRecipientProblem(t, mycall = mycall) != null || body.isEmpty() || mycall.isEmpty()) return null
+        val d = CommandDetail()
+        d.cmd = " MSG "
+        d.from = mycall
+        d.to = if (t.startsWith("@")) t else Varicode.baseCallsign(t)
+        d.relayPath = mycall
+        d.text = body
+        d.utc = clock()
+        d.dial = dialFrequency
+        d.offset = offset
+        d.submode = submode
+        return inbox.append(type = "STORE", d = d)
     }
 
     /** Compose and start sending a message (JS8Call's Send button). */
