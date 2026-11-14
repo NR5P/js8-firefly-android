@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.js8firefly.android.audio.AppClock
+import com.js8firefly.android.audio.AudioDeviceChoice
 import com.js8firefly.android.audio.AudioIO
 import com.js8firefly.android.audio.PTTMethod
 import com.js8firefly.android.audio.WaterfallRenderer
@@ -128,6 +129,8 @@ class AppModel(context: Context) {
     private var lastErrorIsAudio = false
     var routeDescription by mutableStateOf(""); private set
     var usbConnected by mutableStateOf(false); private set
+    var inputChoices by mutableStateOf(emptyList<AudioDeviceChoice>()); private set
+    var outputChoices by mutableStateOf(emptyList<AudioDeviceChoice>()); private set
     var audioRunning by mutableStateOf(false); private set
     var banner by mutableStateOf<String?>(null)
     /** True between start() and stop(). */
@@ -248,6 +251,8 @@ class AppModel(context: Context) {
         audio.preferredInputGain = settings.inputGain
         audio.spectrum.onRow = { row -> waterfall.add(row) }
         audio.inputChannel = settings.inputChannel
+        audio.preferredInputKey = settings.audioInputDevice
+        audio.preferredOutputKey = settings.audioOutputDevice
 
         if (!AudioIO.hasRecordPermission(context)) {
             lastError = micMessage
@@ -306,6 +311,8 @@ class AppModel(context: Context) {
         clearAudioErrorIfRecovered()
         routeDescription = audio.routeDescription
         usbConnected = audio.isUSBInterfaceConnected
+        inputChoices = audio.inputChoices
+        outputChoices = audio.outputChoices
         inputGain = audio.inputGain
     }
 
@@ -357,6 +364,14 @@ class AppModel(context: Context) {
         AppClock.offset = s.clockOffset
         audio.inputChannel = s.inputChannel
         audio.outputLevel = s.tx.outputLevel
+        if (s.audioInputDevice != old.audioInputDevice || s.audioOutputDevice != old.audioOutputDevice) {
+            audio.preferredInputKey = s.audioInputDevice
+            audio.preferredOutputKey = s.audioOutputDevice
+            if (started && !isDemo) {
+                restartAudio()
+                adaptPTTToInterface()
+            }
+        }
         if (s.inputGain != old.inputGain) {
             audio.preferredInputGain = s.inputGain
             audio.applyInputGain()

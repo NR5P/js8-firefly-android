@@ -47,6 +47,9 @@ data class AppSettings(
     val clockOffset: Double = 0.0,
     val macInputDevice: String = "",
     val macOutputDevice: String = "",
+    /** `AudioDeviceChoice.key` of the chosen audio devices; "" = automatic. */
+    val audioInputDevice: String = "",
+    val audioOutputDevice: String = "",
     /** dB from the waterfall's noise floor to full white; null until the user sets it. */
     val waterfallRange: Float? = null,
     val waterfallBrightness: Float = 0f,
@@ -92,6 +95,8 @@ data class AppSettings(
                 clockOffset = o.optDouble("clockOffset", d.clockOffset),
                 macInputDevice = o.optString("macInputDevice", d.macInputDevice),
                 macOutputDevice = o.optString("macOutputDevice", d.macOutputDevice),
+                audioInputDevice = o.optString("audioInputDevice", d.audioInputDevice),
+                audioOutputDevice = o.optString("audioOutputDevice", d.audioOutputDevice),
                 waterfallRange = o.optDoubleOrNull("waterfallRange")?.toFloat(),
                 waterfallBrightness = o.optDouble("waterfallBrightness", d.waterfallBrightness.toDouble()).toFloat(),
                 notificationsEnabled = o.optBoolean("notificationsEnabled", d.notificationsEnabled),
@@ -154,6 +159,8 @@ data class AppSettings(
         put("clockOffset", clockOffset)
         put("macInputDevice", macInputDevice)
         put("macOutputDevice", macOutputDevice)
+        put("audioInputDevice", audioInputDevice)
+        put("audioOutputDevice", audioOutputDevice)
         waterfallRange?.let { put("waterfallRange", it.toDouble()) }
         put("waterfallBrightness", waterfallBrightness.toDouble())
         put("notificationsEnabled", notificationsEnabled)

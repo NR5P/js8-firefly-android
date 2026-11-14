@@ -49,6 +49,8 @@ import com.js8firefly.android.AppModel
 import com.js8firefly.android.AppSettings
 import com.js8firefly.android.GridMath
 import com.js8firefly.android.Format
+import com.js8firefly.android.audio.AudioDeviceChoice
+import com.js8firefly.android.audio.AudioIO
 import com.js8firefly.android.audio.PTTMethod
 import com.js8firefly.android.radio.BLESerialTransport
 import com.js8firefly.android.radio.BlePeripheral
@@ -225,6 +227,9 @@ private fun AudioSection(model: AppModel) {
                 style = Theme.rounded(15), color = Theme.text,
             )
         }
+        AudioDevicePicker("Input device", s.audioInputDevice, model.inputChoices) { v -> model.edit { it.copy(audioInputDevice = v) } }
+        AudioDevicePicker("Output device", s.audioOutputDevice, model.outputChoices) { v -> model.edit { it.copy(audioOutputDevice = v) } }
+        FormText("Automatic uses the USB audio interface when one is plugged in. Pick a device if the radio shows up as more than one.")
         FormPicker("Input channel", s.inputChannel, listOf(0 to "Left", 1 to "Right", -1 to "Mix")) { v -> model.edit { it.copy(inputChannel = v) } }
         FormPicker("PTT method", s.tx.pttMethod, PTTMethod.available.map { it to it.title }) { v -> model.editTx { it.copy(pttMethod = v) } }
         if (s.tx.pttMethod == PTTMethod.digirigTone) {
@@ -248,6 +253,19 @@ private fun AudioSection(model: AppModel) {
         LabeledSlider("Waterfall brightness", s.waterfallBrightness, -20f..20f) { v -> model.edit { it.copy(waterfallBrightness = v) } }
         ActionRow("Restart audio", divider = false) { model.audio.restart() }
     }
+}
+
+/** Automatic, the connected devices, and the saved choice even while it's unplugged. */
+@Composable
+private fun AudioDevicePicker(label: String, selection: String, choices: List<AudioDeviceChoice>, onSelect: (String) -> Unit) {
+    val options = buildList {
+        add("" to "Automatic")
+        choices.forEach { add(it.key to it.name) }
+        if (selection.isNotEmpty() && choices.none { it.key == selection }) {
+            add(selection to "${AudioIO.nameFromKey(selection)} (not connected)")
+        }
+    }
+    FormPicker(label, selection, options, onSelect)
 }
 
 @Composable

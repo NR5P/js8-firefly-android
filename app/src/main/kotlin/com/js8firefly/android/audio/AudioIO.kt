@@ -73,6 +73,9 @@ enum class PTTMethod(val rawValue: String) {
     }
 }
 
+/** An audio device offered in Settings. [key] stays the same across reconnects. */
+data class AudioDeviceChoice(val key: String, val name: String)
+
 /** Audio settings that the render thread reads. */
 data class TxAudioSettings(
     val pttMethod: PTTMethod = PTTMethod.digirigTone,
@@ -158,6 +161,11 @@ class AudioIO(context: Context) {
     /** Called on the main thread after each start / stop / restart has completed. */
     var onStateChange: (() -> Unit)? = null
 
+    /** [AudioDeviceChoice.key] of the device to record from; "" picks automatically. */
+    @Volatile var preferredInputKey = ""
+    /** [AudioDeviceChoice.key] of the device to play to; "" picks automatically. */
+    @Volatile var preferredOutputKey = ""
+
     private var deviceSignature: String? = null
     private var observingDevices = false
 
@@ -171,6 +179,48 @@ class AudioIO(context: Context) {
 
         private fun isUSB(d: AudioDeviceInfo) =
             d.type == AudioDeviceInfo.TYPE_USB_DEVICE || d.type == AudioDeviceInfo.TYPE_USB_HEADSET
+
+        private fun isBluetooth(d: AudioDeviceInfo) =
+            d.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || d.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+
+        // Bluetooth input needs a SCO voice link (8/16 kHz), no use for JS8, so it isn't offered.
+        private val inputTypes = setOf(
+            AudioDeviceInfo.TYPE_BUILTIN_MIC, AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET,
+        )
+        private val outputTypes = setOf(
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+        )
+
+        /** Device ids change on every plug-in, so a choice is remembered by type and name. */
+        fun deviceKey(d: AudioDeviceInfo): String = "${d.type}|${d.productName ?: ""}"
+
+        /** The device name inside a [deviceKey], for a saved choice that isn't plugged in. */
+        fun nameFromKey(key: String): String = key.substringAfter('|', "").ifBlank { "Audio device" }
+
+        private fun choiceName(d: AudioDeviceInfo): String = when {
+            isUSB(d) -> "${deviceName(d)} (USB)"
+            isBluetooth(d) -> "${deviceName(d)} (Bluetooth)"
+            else -> deviceName(d)
+        }
+
+        /**
+         * A Bluetooth audio chip that also enumerates as a USB sound card. The FX-4CR
+         * has one (QCC3024) next to the codec that carries the radio's audio
+         * ("USB PnP Sound Device"), and it is never the one to use.
+         */
+        private fun isBluetoothBridge(d: AudioDeviceInfo): Boolean {
+            val name = d.productName?.toString().orEmpty()
+            return name.startsWith("QCC", ignoreCase = true) || name.contains("bluetooth", ignoreCase = true)
+        }
+
+        /** The saved choice when it is connected, else the USB interface most likely to be the radio. */
+        private fun pick(devices: List<AudioDeviceInfo>, key: String): AudioDeviceInfo? {
+            if (key.isNotEmpty()) devices.firstOrNull { deviceKey(it) == key }?.let { return it }
+            val usb = devices.filter { isUSB(it) }
+            return usb.firstOrNull { !isBluetoothBridge(it) } ?: usb.firstOrNull()
+        }
 
         fun deviceName(d: AudioDeviceInfo?): String {
             d ?: return "–"
@@ -199,20 +249,37 @@ class AudioIO(context: Context) {
 
     // MARK: Devices
 
-    private fun usbInput(): AudioDeviceInfo? =
-        audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull { isUSB(it) && it.isSource }
+    private fun inputs(): List<AudioDeviceInfo> =
+        audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS).filter { it.isSource && it.type in inputTypes }
 
-    private fun usbOutput(): AudioDeviceInfo? =
-        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { isUSB(it) && it.isSink }
+    private fun outputs(): List<AudioDeviceInfo> =
+        audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).filter { it.isSink && it.type in outputTypes }
+
+    /** Where receive audio should come from; null leaves it to Android (the built-in mic). */
+    private fun inputTarget(): AudioDeviceInfo? = pick(inputs(), preferredInputKey)
+
+    /** Where transmit audio should go; null leaves it to Android's media route. */
+    private fun outputTarget(): AudioDeviceInfo? = pick(outputs(), preferredOutputKey)
+
+    /** The USB interface in use for receive, or the one Automatic would use. */
+    private fun usbInput(): AudioDeviceInfo? = inputTarget()?.takeIf { isUSB(it) } ?: pick(inputs(), "")
+
+    /** Inputs the user can choose between, for Settings. */
+    val inputChoices: List<AudioDeviceChoice>
+        get() = inputs().map { AudioDeviceChoice(deviceKey(it), choiceName(it)) }.distinctBy { it.key }
+
+    /** Outputs the user can choose between, for Settings. */
+    val outputChoices: List<AudioDeviceChoice>
+        get() = outputs().map { AudioDeviceChoice(deviceKey(it), choiceName(it)) }.distinctBy { it.key }
 
     /** Human readable description of the current route. */
     val routeDescription: String
         get() {
             val inDev = (if (Build.VERSION.SDK_INT >= 24) record?.routedDevice else null)
-                ?: usbInput()
+                ?: inputTarget()
                 ?: audioManager.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_MIC }
             val outDev = (if (Build.VERSION.SDK_INT >= 24) track?.routedDevice else null)
-                ?: usbOutput()
+                ?: outputTarget()
                 ?: audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
             val ins = if (inDev == null) "–" else deviceName(inDev)
             val outCh = outDev?.channelCounts?.maxOrNull()?.let { min(it, 2) } ?: 2
@@ -311,7 +378,7 @@ class AudioIO(context: Context) {
             add(MediaRecorder.AudioSource.VOICE_RECOGNITION)
             add(MediaRecorder.AudioSource.MIC)
         }
-        val usb = usbInput()
+        val target = inputTarget()
         for (enc in listOf(AudioFormat.ENCODING_PCM_FLOAT, AudioFormat.ENCODING_PCM_16BIT)) {
             for (src in sources) {
                 for (ch in listOf(2, 1)) {
@@ -330,7 +397,9 @@ class AudioIO(context: Context) {
                         null
                     } ?: continue
                     if (r.state != AudioRecord.STATE_INITIALIZED) { r.release(); continue }
-                    if (usb != null) r.setPreferredDevice(usb)
+                    if (target != null && !r.setPreferredDevice(target)) {
+                        Log.w(TAG, "input: ${deviceName(target)} refused as preferred device")
+                    }
                     return r to RecordConfig(src, ch, enc)
                 }
             }
@@ -496,7 +565,9 @@ class AudioIO(context: Context) {
             onError?.invoke("Output start: audio output unavailable")
             return
         }
-        usbOutput()?.let { t.setPreferredDevice(it) }
+        outputTarget()?.let {
+            if (!t.setPreferredDevice(it)) Log.w(TAG, "output: ${deviceName(it)} refused as preferred device")
+        }
         try {
             t.play()
         } catch (e: Exception) {
