@@ -65,12 +65,17 @@ free. A Play app that launches as free can never be made paid later.
 
 > First release of JS8 Firefly for Android.
 
-## Graphics (still to make)
+## Graphics
 
-- App icon: 512 × 512 PNG. Use the iPhone repo's `icon-512.png`; Play applies its own rounded mask.
-- Feature graphic: 1024 × 500 PNG or JPEG, no transparency.
-- Phone screenshots: 2 to 8, 16:9 or 9:16, each side between 320 and 3840 px.
-- 7-inch and 10-inch tablet screenshots: optional.
+All in `Docs/PlayStore/`.
+
+- App icon (512 × 512): `graphics/icon-512.png`, the iPhone app's icon. Play applies its own rounded mask.
+- Feature graphic (1024 × 500): `graphics/feature-graphic.png`, rendered by `tools/play_graphics.py`.
+- Phone screenshots (1080 × 1920): upload `screenshots/phone/01`–`07` in order. They come from a
+  debug build in demo mode on the Pixel 8 emulator with the display set to 1080x1920
+  (`adb shell wm size 1080x1920`), because Play rejects screenshots taller than 2:1. Demo mode:
+  `adb shell am start -n com.js8firefly.app/com.js8firefly.android.MainActivity --ez demo true`.
+- 7-inch and 10-inch tablet screenshots: optional, not made.
 
 ## App content
 
@@ -107,9 +112,12 @@ type the app declares.
 
 > While running, JS8 Firefly holds a connection to the user's radio over USB serial, Bluetooth LE or the local network to key the transmitter (PTT) and set its frequency. This connection has to stay open with the screen off so automatic replies and heartbeats can transmit. It is started by the user, shows a persistent notification, and stops when the user closes the app.
 
-Video for both: a screen recording that shows the app receiving with a radio or
-interface attached, the screen turning off, the notification still present, and a
-decode or reply arriving. Upload it to YouTube as unlisted and paste the link.
+Video for both: `video/foreground-service-demo.mp4` (95 seconds). It shows the app
+receiving, the user going to the home screen, the "JS8 Firefly is on the air"
+notification staying in the shade, a "JS8 directed message" alert arriving while the app
+is in the background, and the app reopened with the new decodes. It was recorded in demo
+mode on the emulator, so the signals are scripted rather than off a radio. Upload it to
+YouTube as unlisted and paste the link.
 
 ## Release checklist
 
