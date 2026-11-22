@@ -12,8 +12,22 @@ more to cover dropouts.
   (`js8firefly-testers@googlegroups.com`). Anyone can join without approval; only the
   owner can post or see the member list. This replaced the `testersJS8Firefly` email list
   on Nov 21, 2026; the four people on that list have to join the group to keep access.
-- The track's "Feedback URL or email address" field is empty. Google asks about tester
-  feedback on the production application, so fill it in.
+- The track's "Feedback URL or email address" is nathan@nr5p.com (set Nov 22, 2026).
+
+## Price and promo codes
+
+The app is paid (USD 4.99), and the price applies to the closed test too: opting in is
+free, but installing costs 4.99. Testers get it free with a one-time promo code instead.
+A redeemed code puts the app in their Google account for good, including after launch.
+
+- Promotion "Closed test testers" in Play Console → Monetize with Play → Promo codes:
+  20 one-time codes, valid Nov 22, 2026 4:00 PM to Feb 28, 2027. Download them from
+  there. Send each tester one code privately and keep track of who got which.
+- Testers redeem in the Play Store app: profile icon → Payments & subscriptions →
+  Redeem code (or play.google.com/redeem), then install.
+- Two testers bought the app before the codes existed (USD 8.48 in earnings by
+  Nov 22). Refund them in Order management if wanted; they keep the app either way.
+- Up to 500 codes can be created per quarter if more are needed.
 
 ## Links for testers
 
@@ -29,7 +43,7 @@ Both steps, in this order, with the same Google account:
 > 1. Join the tester group: https://groups.google.com/g/js8firefly-testers/about
 > 2. Opt in and install from Google Play: https://play.google.com/apps/testing/com.js8firefly.app
 >
-> Please stay opted in for at least two weeks. Use the same Google account for both steps. 73, NR5P
+> Please stay opted in for at least two weeks. Use the same Google account for both steps. The app will be paid on Google Play, but testers get it free: message me and I'll send you a code. 73, NR5P
 
 ## Where to post
 

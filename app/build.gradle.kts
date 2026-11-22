@@ -22,7 +22,7 @@ android {
         applicationId = "com.js8firefly.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0"
     }
 
@@ -56,6 +56,11 @@ android {
         jvmTarget = "17"
     }
 
+    // JVM unit tests (rig control CAT bytes): android.* calls such as Log return defaults.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -85,4 +90,9 @@ dependencies {
     // USB serial CAT and RTS/DTR PTT (FTDI, CP210x, CH34x, CDC-ACM: Digirig, QMX, Yaesu).
     implementation("com.github.mik3y:usb-serial-for-android:3.8.1")
     implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    // Real org.json for settings round-trip tests (android.jar's copy is a stub).
+    testImplementation("org.json:json:20240303")
 }

@@ -8,6 +8,8 @@
     <usb-device vendor-id="6790" />
     <!-- Prolific PL2303 -->
     <usb-device vendor-id="1659" />
+    <!-- Icom IC-705 USB (vendor 0x0C26, CDC-ACM ports) -->
+    <usb-device vendor-id="3110" />
     <!-- QRP Labs QMX/QDX (CDC-ACM) -->
     <usb-device vendor-id="1155" />
 </resources>

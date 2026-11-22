@@ -13,10 +13,11 @@ counts are for the text below.
 | Tags | Pick the closest to amateur radio that Play Console offers |
 | Email | nathan@nr5p.com |
 | Website | https://nr5p.com/js8-firefly.html |
-| Privacy policy | https://nr5p.com/js8-firefly-privacy.html (publish the Android additions in `privacy-policy.md` first) |
+| Privacy policy | https://nr5p.com/js8-firefly-android-privacy.html |
 
-Price is not set here: decide whether Android matches the iPhone app (USD 4.99) or is
-free. A Play app that launches as free can never be made paid later.
+Price: USD 4.99, matching the iPhone app, set as Paid in Play Console. Keep it paid: a
+free Play app can never be made paid later. Closed testers get it free with promo codes
+(see `testers.md`).
 
 **Full description (4000)**
 
@@ -51,7 +52,7 @@ free. A Play app that launches as free can never be made paid later.
 > • Keeps receiving with the screen off and notifies you when a message is for you
 > • Levels panel for setting receive and transmit audio, with a Tune button
 >
-> FREE AND OPEN SOURCE
+> OPEN SOURCE
 > No ads, no accounts, no tracking. JS8 Firefly is free software under the GNU GPL v3, built on the work of JS8Call by Jordan Sherer, KN4CRD, and its contributors. It is not affiliated with the JS8Call project. The source code is at github.com/NR5P/js8-firefly-android.
 >
 > WHAT YOU NEED
@@ -81,10 +82,10 @@ All in `Docs/PlayStore/`.
 
 | Section | Answer |
 |---|---|
-| Privacy policy | https://nr5p.com/js8-firefly-privacy.html |
+| Privacy policy | https://nr5p.com/js8-firefly-android-privacy.html |
 | Ads | No, the app does not contain ads |
 | App access | All functionality is available without special access (no login) |
-| Content rating | Category "Utility, Productivity, Communication or Other". Answer No to everything. If it asks whether users can interact or exchange content: messages go over amateur radio between licensed operators, not through a service the app runs. |
+| Content rating | Category "All Other App Types". Yes to users exchanging content with other users and to that being the primary content; No to nudity, graphic violence, blocking, reporting, moderation, friends-only, online content, age-restricted products, precise location sharing, purchases, rewards, browser and news. Result: Teen (ESRB), 12+ (ClassInd), "Users Interact". |
 | Target audience | 18 and over |
 | News app | No |
 | Government app | No |
@@ -116,12 +117,12 @@ Video for both: `video/foreground-service-demo.mp4` (95 seconds). It shows the a
 receiving, the user going to the home screen, the "JS8 Firefly is on the air"
 notification staying in the shade, a "JS8 directed message" alert arriving while the app
 is in the background, and the app reopened with the new decodes. It was recorded in demo
-mode on the emulator, so the signals are scripted rather than off a radio. Upload it to
-YouTube as unlisted and paste the link.
+mode on the emulator, so the signals are scripted rather than off a radio. It is on YouTube
+as unlisted: https://www.youtube.com/watch?v=iAVYg87IiK8
 
 ## Release checklist
 
-- Upload `app/build/outputs/bundle/release/app-release.aab` (versionCode 1, versionName 1.0).
+- Upload `app/build/outputs/bundle/release/app-release.aab` (versionCode 2, versionName 1.0; versionCode 1 is the Nov 8 internal test build).
 - Enroll in Play App Signing when prompted; the bundle is signed with the upload key.
 - If the developer account is a personal one created after November 2023: run a closed
   test with at least 12 testers for 14 days before applying for production.

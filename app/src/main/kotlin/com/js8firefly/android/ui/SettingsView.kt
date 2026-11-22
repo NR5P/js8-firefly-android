@@ -1,5 +1,8 @@
 package com.js8firefly.android.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -240,6 +243,8 @@ private fun AudioSection(model: AppModel) {
         }
         if (s.tx.pttMethod == PTTMethod.cat && s.rig.connection == RigConnection.none) {
             FormText("CAT PTT needs a rig connection below.", color = Theme.warn)
+        } else if (s.tx.pttMethod == PTTMethod.cat && s.rig.connection.usesCATProtocol && !s.rig.preset.hasCATPTT) {
+            FormText("The ${s.rig.preset.title} can't be keyed over CAT. Use RTS or DTR (e.g. Digirig) or VOX.", color = Theme.warn)
         }
         if (s.tx.pttMethod == PTTMethod.serialRTS || s.tx.pttMethod == PTTMethod.serialDTR) {
             FormText("Uses the serial port configured under Rig Control (USB serial CAT).")
@@ -298,6 +303,14 @@ private fun RigSection(model: AppModel) {
                 FormPicker("Frequency digits", rig.yaesuDigits, listOf(8 to "8 (FTDX3000/5000, FT-950, FT-450)", 9 to "9 (FT-991, FTDX101/10, FT-710, FT-891)")) { v ->
                     model.editRig { it.copy(yaesuDigits = v) }
                 }
+                // Both bit a real FTDX3000 (Nov 2026): CAT RTS ON ignores all CAT; DATA IN = rear jack gives no power.
+                FormText("In the radio's menu: CAT RATE to match the baud rate below, CAT RTS to OFF (when on, the radio ignores CAT), and DATA IN SELECT (DATA PORT SELECT on some models) to USB so transmit audio comes over the USB cable.")
+            }
+            if (!rig.preset.hasCATPTT) {
+                FormText("This radio has no CAT transmit command. CAT still sets the frequency; key it with RTS or DTR (e.g. Digirig) or VOX under PTT method.", color = Theme.warn)
+            }
+            if (rig.catProtocol == CATProtocol.yaesuLegacy) {
+                FormText("Set the radio's CAT RATE menu to the baud rate below (factory setting 4800) and DIG MODE to USER-U. Data mode switches the radio to DIG, which uses the rear DATA jack.")
             }
             if (rig.catProtocol == CATProtocol.icom) {
                 var addr by remember(rig.icomAddress) { mutableStateOf(String.format(Locale.US, "%02X", rig.icomAddress)) }
@@ -305,6 +318,7 @@ private fun RigSection(model: AppModel) {
                     addr = v.uppercase()
                     v.toIntOrNull(16)?.takeIf { it in 0..255 }?.let { a -> model.editRig { it.copy(icomAddress = a) } }
                 }, style = Theme.mono(14), uppercase = true)
+                FormText("Match the radio's CI-V address (hex) and CI-V baud rate (Auto works). If a radio with a USB port doesn't answer, set its CI-V USB Port menu to \"Unlink from [REMOTE]\" and CI-V USB Baud Rate to the rate below.")
             }
             FormToggle("Set USB/DATA mode on connect", rig.setDataModeOnConnect) { v -> model.editRig { it.copy(setDataModeOnConnect = v) } }
         }
@@ -421,6 +435,17 @@ private fun ClockSection(model: AppModel) {
 private fun AboutSection() {
     FormSection("About", Icons.Outlined.Info) {
         FormText("JS8 Firefly 1.0. JS8 protocol, modem and message handling ported from JS8Call / JS8Call-improved (GPLv3). Compatible with JS8Call stations on all speeds: Slow, Normal, Fast, Turbo and Ultra.")
+        // Google Play requires the privacy policy to be reachable from inside the app.
+        val context = LocalContext.current
+        FormRow(onClick = {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://nr5p.com/js8-firefly-android-privacy.html")))
+            } catch (e: ActivityNotFoundException) {
+                // No browser installed; nothing to open the page with.
+            }
+        }) {
+            Text("Privacy policy", style = Theme.rounded(16), color = Theme.accent)
+        }
     }
 }
 

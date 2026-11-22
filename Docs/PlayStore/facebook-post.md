@@ -18,7 +18,7 @@ have access to. Post as Nathan (NR5P).
 
 ## Post text
 
-Need 12 Android testers for JS8 Firefly, a free open-source JS8 app
+Need 12 Android testers for JS8 Firefly, an open-source JS8 app
 
 I'm Nathan, NR5P. I wrote JS8 Firefly, a JS8 client for Android phones and tablets. It works with JS8Call stations on all five speeds, and it's open source with no ads, accounts or tracking.
 
@@ -40,7 +40,8 @@ Thanks and 73, NR5P
 
 ## If someone asks
 
-- Cost: free during the test.
+- Cost: the app is USD 4.99 on Google Play, but testers get it free with a promo code.
+  Tell them Nathan will message them a code; never post codes in the group.
 - "The group link says I don't have permission": use the link ending in /about, sign in
   to Google, then click Join group.
 - "The Play link says app not found": join the group first, use the same Google account
