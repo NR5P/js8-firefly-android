@@ -19,14 +19,14 @@ more to cover dropouts.
 
 Both steps, in this order, with the same Google account:
 
-1. Join the group: https://groups.google.com/g/js8firefly-testers
+1. Join the group: https://groups.google.com/g/js8firefly-testers/about
 2. Opt in and install: https://play.google.com/apps/testing/com.js8firefly.app
 
 ## Recruiting post
 
 > Looking for Android testers for JS8 Firefly, a JS8 client for your phone or tablet (the Android version of my iPhone app). Google requires 12 testers for 14 days before I can release it. You don't need a radio hooked up to help, though on-air reports with a Digirig, QMX or QDX are very welcome.
 >
-> 1. Join the tester group: https://groups.google.com/g/js8firefly-testers
+> 1. Join the tester group: https://groups.google.com/g/js8firefly-testers/about
 > 2. Opt in and install from Google Play: https://play.google.com/apps/testing/com.js8firefly.app
 >
 > Please stay opted in for at least two weeks. Use the same Google account for both steps. 73, NR5P
